@@ -2,7 +2,7 @@
 % Please edit documentation in R/Ncommon.R
 \name{\%>\%}
 \alias{\%>\%}
-\title{re-export magrittr pipe operator}
+\title{Re-export magrittr pipe operator}
 \description{
-re-export magrittr pipe operator
+Re-export magrittr pipe operator
 }
