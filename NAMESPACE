@@ -2,6 +2,10 @@
 
 export("%>%")
 export("%||%")
+export(config_get)
+export(config_get_hash)
+export(config_load)
+export(config_set)
 importFrom(magrittr,"%>%")
 importFrom(rlang,"%||%")
 importFrom(rlang,.data)

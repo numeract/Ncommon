@@ -34,6 +34,7 @@ Imports:
     tibble,
     tidyselect,
     stringr,
+    yaml,
     zeallot
 Suggests:
     testthat,
