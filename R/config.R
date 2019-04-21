@@ -1,13 +1,8 @@
 # dispatcher for configurations found in config/config.yml
 
-# !diagnostics suppress=.,
+# !diagnostics suppress=
 
 
-# package env ----
-.PKGENV <- new.env(parent = emptyenv())
-
-
-# config.yml ----
 # see https://github.com/rstudio/config
 # Add your hash to config.yml using `config_get_hash()`
 # Remember to update the hash if the environment changes
