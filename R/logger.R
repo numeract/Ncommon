@@ -23,7 +23,7 @@ log_rotation <- function(dir_name = NULL,
         dir_name <- fs::path_dir(path_pattern)
     }
     if (!fs::dir_exists(dir_name)) fs::dir_create(dir_name)
-    stopifnot(!fs::dir_exists(dir_name))
+    stopifnot(fs::dir_exists(dir_name))
     
     max_hist <- cfg$logger$max_hist %||% 9L
     stopifnot(is_key_int(max_hist))
