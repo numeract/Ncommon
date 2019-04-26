@@ -55,12 +55,12 @@ config_load <- function(config_active = NULL,
             } else if (length(config_active) >= 2L) {
                 stop("Multiple configurations found for hash `", hash, "`")
             }
-            cat(":: Using configuration `", config_active, 
-                "` for hash ", hash, " ::\n", sep = "")
+            cat("config_load: Using configuration `", config_active, 
+                "` for hash `", hash, "`\n", sep = "")
         } else {
             config_active <- Sys.getenv("R_CONFIG_ACTIVE")
-            cat(":: Using configuration `", config_active, 
-                "` enforced by R_CONFIG_ACTIVE ::\n", sep = "")
+            cat("config_load: Using configuration `", config_active, 
+                "` enforced by R_CONFIG_ACTIVE\n", sep = "")
         }
     }
     
