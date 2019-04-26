@@ -208,6 +208,21 @@ db_connect <- function(connector = NULL,
         connector <- db_get_connector(connector = connector, cfg = cfg)
         connector_lst <- db_get_connector_info(connector = connector, cfg = cfg)
         
+        # checks
+        stopifnot(is_key_chr(connector_lst$database))
+        stopifnot(is_key_chr(connector_lst$schema))
+        patterns <- connector_lst$patterns %||% list()
+        patterns$pk <- patterns$pk %||% "{table}_key"
+        patterns$key <- patterns$key %||% "_key$"
+        patterns$id <- patterns$id %||% "_id$"
+        patterns$bin <- patterns$bin %||% "_bin$"
+        patterns$json <- patterns$json %||% "_json$"
+        stopifnot(is_key_chr(patterns$pk))
+        stopifnot(is_key_chr(patterns$key))
+        stopifnot(is_key_chr(patterns$id))
+        stopifnot(is_key_chr(patterns$bin))
+        stopifnot(is_key_chr(patterns$json))
+        
         # create pool
         pl <- pool::dbPool(
             drv = odbc::odbc(),
@@ -220,7 +235,7 @@ db_connect <- function(connector = NULL,
         db_set_attr(
             database = connector_lst$database,
             schema = connector_lst$schema,
-            pk_pattern = connector_lst$pk_pattern,
+            patterns = patterns,
             connector = connector
         )
         
@@ -297,6 +312,36 @@ db_get_schema <- function(connector = NULL) {
 }
 
 
+db_get_pattern <- function(pattern_name,
+                           connector = NULL) {
+    
+    patterns <- db_get_attr("patterns", connector = connector)
+    
+    patterns[[pattern_name]]
+}
+
+
+db_get_pattern_cols <- function(df, 
+                                pattern_name,
+                                cols = NULL,
+                                connector = NULL) {
+    
+    if (isTRUE(is.na(cols))) return(character())
+    
+    if (is.null(cols)) {
+        pattern <- db_get_pattern(pattern_name, connector = connector)
+        stopifnot(is_key_chr(pattern))
+        cols <- tidyselect::vars_select(
+            names(df), tidyselect::matches(pattern))
+    }
+    
+    msk <- rlang::has_name(df, cols)
+    cols <- cols[msk]
+    
+    cols
+}
+
+
 # bin ----
 to_bin <- function(x) {
     
@@ -311,17 +356,14 @@ to_bin_lst <- function(x) {
 
 
 to_bin_df <- function(df, 
-                      bin_cols = ends_with("_bin")) {
+                      bin_cols = NULL,
+                      connector = NULL) {
     
-    msk <- rlang::has_name(df, bin_cols)
-    cols <- cols[msk]
-    if (length(cols) == 0L) return(df)
+    bin_cols <- db_get_pattern_cols(
+        df, pattern_name = "bin", cols = bin_cols, connector = connector)
+    if (length(bin_cols) == 0L) return(df)
     
-    bin_cols <- glue::glue("{cols}_bin")
-    
-    df %>%
-        dplyr::mutate_at(cols, to_bin_lst) %>%
-        dplyr::rename_at(dplyr::vars(cols), ~ bin_cols)
+    dplyr::mutate_at(df, bin_cols, to_bin_lst)
 }
 
 
@@ -338,24 +380,69 @@ from_bin_lst <- function(x) {
 
 
 from_bin_df <- function(df,
-                        bin_cols = NULL) {
+                        bin_cols = NULL,
+                        connector = NULL) {
     
-    if (is.null(bin_cols)) {
-        msk <- get_classes(df) == "raw"
-        bin_cols <- names(df)[msk]
-    } else {
-        msk <- rlang::has_name(df, bin_cols)
-        bin_cols <- bin_cols[msk]
-    }
+    bin_cols <- db_get_pattern_cols(
+        df, pattern_name = "bin", cols = bin_cols, connector = connector)
     if (length(bin_cols) == 0L) return(df)
     
-    df %>%
-        dplyr::mutate_at(bin_cols, from_bin_lst) %>%
-        dplyr::rename_at(dplyr::vars(bin_cols), ~ cols)
+    dplyr::mutate_at(df, bin_cols, from_bin_lst)
+}
+
+
+# json ----
+to_json <- function(x) {
+    
+    jsonlite::toJSON(x)
+}
+
+
+to_json_lst <- function(x) {
+    
+    purrr::map(x, to_json)
+}
+
+
+to_json_df <- function(df, 
+                       json_cols = NULL,
+                       connector = NULL) {
+    
+    json_cols <- db_get_pattern_cols(
+        df, pattern_name = "json", cols = json_cols, connector = connector)
+    if (length(json_cols) == 0L) return(df)
+    
+    dplyr::mutate_at(df, json_cols, to_json_lst)
+}
+
+
+from_json <- function(x) {
+    
+    jsonlite::fromJSON(x)
+}
+
+
+from_json_lst <- function(x) {
+    
+    purrr::map(x, from_json)
+}
+
+
+from_json_df <- function(df,
+                         json_cols = NULL,
+                         connector = NULL) {
+    
+    json_cols <- db_get_pattern_cols(
+        df, pattern_name = "json", cols = json_cols, connector = connector)
+    if (length(json_cols) == 0L) return(df)
+    
+    dplyr::mutate_at(df, json_cols, from_json_lst)
 }
 
 
 # tbl ----
+
+#' @export
 db_list_tbl <- function(table_type = NULL,
                         schema = NULL,
                         connector = NULL) {
@@ -375,6 +462,7 @@ db_list_tbl <- function(table_type = NULL,
 }
 
 
+#' @export
 db_tbl_exists <- function(table, 
                           tables_only = FALSE,
                           schema = NULL,
@@ -400,11 +488,15 @@ db_require_tbl <- function(table,
                            connector = NULL) {
     
     stopifnot(db_tbl_exists(
-        table = table, tables_only = tables_only,
-        schema = schema, connector = connector))
+        table = table, 
+        tables_only = tables_only,
+        schema = schema, 
+        connector = connector)
+    )
 }
 
 
+#' @export
 db_create_tbl <- function(table, 
                           create_sql,
                           force_new = FALSE,
@@ -437,6 +529,7 @@ db_create_tbl <- function(table,
 }
 
 
+#' @export
 db_tbl <- function(table,
                    schema = NULL,
                    connector = NULL) {
@@ -456,33 +549,23 @@ db_tbl <- function(table,
 }
 
 
+#' @export
 db_collect <- function(tbl,
-                       bin_cols = NULL) {
+                       bin_cols = NULL,
+                       json_cols = NULL,
+                       connector = NULL) {
     
-    col_names <- colnames(tbl)
+    df <- dplyr::collect(tbl)
+    df <- from_bin_df(df, bin_cols = bin_cols, connector = connector)
+    df <- from_json_df(df, json_cols = json_cols, connector = connector)
     
-    if (is.null(bin_cols)) {
-        msk <- grepl("_bin$", col_names)
-        bin_cols <- col_names[msk]
-    } else {
-        bin_cols <- bin_cols %if_in% col_names
-    }
-    
-    if (length(bin_cols) > 0L) {
-        tbl %>%
-            # _bin are the last columns when collecting
-            dplyr::select(-dplyr::one_of(bin_cols), dplyr::everything()) %>%
-            dplyr::collect() %>%
-            # restore col order
-            dplyr::select(dplyr::one_of(col_names)) %>%
-            from_bin_df()
-    } else {
-        dplyr::collect(tbl)
-    }
+    df
 }
 
 
 # field ----
+
+#' @export
 db_list_fields <- function(table,
                            schema = NULL,
                            connector = NULL) {
@@ -496,19 +579,22 @@ db_list_fields <- function(table,
 }
 
 
+#' @export
 db_get_pk <- function(table,
                       schema = NULL,
                       connector = NULL) {
     
-    pl <- db_get_pool(connector = connector)
-    schema <- schema %||% attr(pl, "schema")
-    pk_pattern <- attr(pl, "pk_pattern")
+    stopifnot(is_key_chr(table))
+    
+    schema <- schema %||% db_get_schema(connector = connector)
+    pk_pattern <- db_get_pattern("pk", connector = connector)
     
     # default pattern uses var `table``
     glue::glue(pk_pattern)
 }
 
 
+#' @export
 db_get_max <- function(field,
                        table,
                        schema = NULL,
@@ -516,7 +602,7 @@ db_get_max <- function(field,
     
     val <- NULL
     
-    stopifnot(is_key_chr(field_name))
+    stopifnot(is_key_chr(field))
     
     df <- 
         db_tbl(table = table, schema = schema, connector = connector) %>%
@@ -532,7 +618,9 @@ db_get_max <- function(field,
 }
 
 
-# low level ----
+# basic ----
+
+#' @export
 db_insert <- function(df,
                       table, 
                       schema = NULL,
@@ -583,6 +671,7 @@ db_insert <- function(df,
 }
 
 
+#' @export
 db_update <- function(df,
                       table, 
                       schema = NULL,
@@ -628,6 +717,7 @@ db_update <- function(df,
 }
 
 
+#' @export
 db_query <- function(query_path,
                      connector = NULL) {
     
@@ -640,26 +730,4 @@ db_query <- function(query_path,
     res_df <- tibble::as_tibble(res)
     
     res_df
-}
-
-
-db_get_max <- function(field,
-                       table, 
-                       schema = NULL,
-                       connector = NULL) {
-    
-    val <- NULL
-    stopifnot(is_key_chr(field_name))
-    
-    df <- 
-        db_tbl(table = table, schema = schema, connector = connector) %>%
-        dplyr::select(val = dplyr::one_of(field)) %>%
-        dplyr::summarise(val = max(val, na.rm = TRUE)) %>%
-        dplyr::collect()
-    
-    if (identical(df$val, NA_integer_)) {
-        0L
-    } else {
-        df$val
-    }
 }
