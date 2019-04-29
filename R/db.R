@@ -269,6 +269,22 @@ db_close <- function(connector = NULL) {
 }
 
 
+#' @export
+db_close_all <- function() {
+    
+    POOL <- db_get_pool_lst()
+    POOL$db_default <- NULL
+    POOL %>%
+        purrr::iwalk(.f = function(pl, connector) {
+            pool::poolClose(pl)
+            .PKGENV$POOL[[connector]] <- NULL
+        })
+    .PKGENV$POOL$db_default <- NA_character_
+    
+    invisible(NULL)
+}
+
+
 # attr ----
 db_set_attr <- function(..., 
                         connector = NULL) {
@@ -282,9 +298,7 @@ db_set_attr <- function(...,
     
     attr_lst %>%
         purrr::iwalk(.f = function(attr_value, attr_name){
-            if (is_key_chr(attr_value)) {
-                attr(.PKGENV$POOL[[connector]], attr_name) <- attr_value
-            }
+            attr(.PKGENV$POOL[[connector]], attr_name) <- attr_value
         })
     
     invisible(NULL)
@@ -300,18 +314,21 @@ db_get_attr <- function(attr_name,
 }
 
 
+#' @export
 db_get_database <- function(connector = NULL) {
     
     db_get_attr("database", connector = connector)
 }
 
 
+#' @export
 db_get_schema <- function(connector = NULL) {
     
     db_get_attr("schema", connector = connector)
 }
 
 
+#' @export
 db_get_pattern <- function(pattern_name,
                            connector = NULL) {
     
@@ -321,6 +338,7 @@ db_get_pattern <- function(pattern_name,
 }
 
 
+#' @export
 db_get_pattern_cols <- function(df, 
                                 pattern_name,
                                 cols = NULL,
@@ -482,6 +500,7 @@ db_tbl_exists <- function(table,
 }
 
 
+#' @export
 db_require_tbl <- function(table,
                            tables_only = FALSE,
                            schema = NULL,
@@ -589,8 +608,8 @@ db_get_pk <- function(table,
     schema <- schema %||% db_get_schema(connector = connector)
     pk_pattern <- db_get_pattern("pk", connector = connector)
     
-    # default pattern uses var `table``
-    glue::glue(pk_pattern)
+    # default pattern uses var `table`
+    as.character(glue::glue(pk_pattern))
 }
 
 
@@ -651,11 +670,11 @@ db_insert <- function(df,
     # create SQL statement
     df_fields <- odbc::dbQuoteIdentifier(conn, df_fields)
     params <- rep("?", length(df_fields))
-    sql <- glue::glue(
+    sql <- as.character(glue::glue(
         "INSERT INTO [{schema}].[{table}] (",
         paste0(df_fields, collapse = ", "), ")\n",
         "VALUES (", paste0(params, collapse = ", "), ")"
-    )
+    ))
     sql_values <- odbc::sqlData(conn, df)
     
     n <- 0L
@@ -695,11 +714,11 @@ db_update <- function(df,
     
     # create SQL statement
     df_fields <- odbc::dbQuoteIdentifier(conn, df_fields)
-    sql <- glue::glue(
+    sql <- as.character(glue::glue(
         "UPDATE [{schema}].[{table}]",
         " SET ", paste0(df_fields[-1L], "=?", collapse = ", "),
         " WHERE {df_fields[1L]}=?", 
-    )
+    ))
     sql_values <- 
         odbc::sqlData(conn, df) %>%
         dplyr::select(-1L, dplyr::everything())
