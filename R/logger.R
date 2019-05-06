@@ -32,13 +32,13 @@ log_rotation <- function(dir_name = NULL,
         # delete old files
         hid_new <- formatC(i, width = 2, flag = "0")
         pattern <- glue::glue("{dir_name}/.*_h{hid_new}[_.]")
-        del_path <- fs::dir_ls(dir_name, regexp = pattern, recursive = FALSE)
+        del_path <- fs::dir_ls(dir_name, regexp = pattern)
         if (length(del_path) > 0L) fs::file_delete(del_path)
         
         # rename files
         hid_old <- formatC(i - 1L, width = 2, flag = "0")
         pattern <- glue::glue("{dir_name}/.*_h{hid_old}[_.]")
-        old_path <- fs::dir_ls(dir_name, regexp = pattern, recursive = FALSE)
+        old_path <- fs::dir_ls(dir_name, regexp = pattern)
         
         if (length(old_path) > 0L) {
             old <- glue::glue("(_h){hid_old}([_.])")
