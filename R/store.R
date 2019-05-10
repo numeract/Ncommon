@@ -48,8 +48,10 @@ ds_set_connector <- function(ds,
         # allow to overwrite connector schema, pk_pattern
         db_set_attr(
             connector = ds$connector, 
-            schema = ds$schema,
-            pk_pattern = ds$pk_pattern
+            schema = ds$schema %||% 
+                db_get_attr("schema", connector = ds$connector),
+            pk_pattern = ds$pk_pattern %||% 
+                db_get_attr("pk_pattern", connector = ds$connector)
         )
         # set classes
         classes <- c(paste0("ds_", dc_class), "ds_sql")
