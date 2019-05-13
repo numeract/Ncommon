@@ -649,7 +649,7 @@ db_insert <- function(df,
     schema <- schema %||% db_get_schema(connector = connector)
     db_require_tbl(
         table = table, tables_only = TRUE, schema = schema, connector = connector)
-    if (nrow(df) == 0L) return(invisible(0L))
+    if (nrow(df) == 0L) return(0L)
     
     conn <- pool::poolCheckout(db_connect(connector = connector))
     on.exit(pool::poolReturn(conn))
@@ -686,7 +686,7 @@ db_insert <- function(df,
         finally = if (exists("rs")) odbc::dbClearResult(rs)
     )
     
-    invisible(n)
+    n
 }
 
 
@@ -699,7 +699,7 @@ db_update <- function(df,
     schema <- schema %||% db_get_schema(connector = connector)
     db_require_tbl(
         table = table, tables_only = TRUE, schema = schema, connector = connector)
-    if (nrow(df) == 0L) return(invisible(0L))
+    if (nrow(df) == 0L) return(0L)
     
     conn <- pool::poolCheckout(db_connect(connector = connector))
     on.exit(pool::poolReturn(conn))
@@ -732,13 +732,62 @@ db_update <- function(df,
         finally = if (exists("rs")) odbc::dbClearResult(rs)
     )
     
-    invisible(n)
+    n
 }
 
 
 #' @export
-db_query <- function(query_path,
-                     connector = NULL) {
+db_delete <- function(keys,
+                      key_field = NULL,
+                      table, 
+                      schema = NULL,
+                      connector = NULL) {
+    
+    schema <- schema %||% db_get_schema(connector = connector)
+    db_require_tbl(
+        table = table, tables_only = TRUE, schema = schema, connector = connector)
+    if (length(keys) == 0L) return(0L)
+    stopifnot(are_keys_int(keys))
+    
+    conn <- pool::poolCheckout(db_connect(connector = connector))
+    on.exit(pool::poolReturn(conn))
+    
+    # key field, default PK
+    db_fields <- odbc::dbListFields(conn, name = table, schema_name = schema)
+    if (is.null(key_field)) {
+        key_field <- db_get_pk(
+            table = table, schema = schema, connector = connector)
+        stopifnot(identical(db_fields[1L], key_field))
+    } else {
+        stopifnot(is_key_chr(key_field))
+        stopifnot(key_field %in% db_fields)
+    }
+    df <- data.frame(pk = keys) %>% rlang::set_names(key_field)
+    
+    # create SQL statement
+    key_field <- odbc::dbQuoteIdentifier(conn, key_field)
+    sql <- as.character(glue::glue(
+        "DELETE [{schema}].[{table}]",
+        " WHERE {key_field}=?", 
+    ))
+    sql_values <- odbc::sqlData(conn, df)
+    
+    n <- 0L
+    tryCatch({
+        rs <- odbc::dbSendQuery(conn, sql)
+        odbc::dbBind(rs, sql_values)
+        n <- odbc::dbGetRowsAffected(rs)
+    }, 
+        finally = if (exists("rs")) odbc::dbClearResult(rs)
+    )
+    
+    n
+}
+
+
+#' @export
+db_query_file <- function(query_path,
+                          connector = NULL) {
     
     conn <- pool::poolCheckout(db_connect(connector = connector))
     on.exit(pool::poolReturn(conn))
@@ -749,4 +798,18 @@ db_query <- function(query_path,
     res_df <- tibble::as_tibble(res)
     
     res_df
+}
+
+
+#' @export
+db_execute <- function(sql,
+                       connector = NULL) {
+    
+    conn <- pool::poolCheckout(db_connect(connector = connector))
+    on.exit(pool::poolReturn(conn))
+    
+    # fail if error
+    n <- DBI::dbExecute(conn, sql)
+    
+    n
 }
