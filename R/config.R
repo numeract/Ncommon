@@ -45,7 +45,7 @@ config_load <- function(config_active = NULL,
     if (!rlang::is_string(config_active)) {
         if (Sys.getenv("R_CONFIG_ACTIVE", "default") == "default") {
             # R_CONFIG_ACTIVE env var not set, use config_hash
-            cfg_yml <- yaml::read_yaml(config_file, eval.expr = TRUE)
+            cfg_yml <- yaml::read_yaml(config_file, eval.expr = FALSE)
             hash <- config_get_hash()
             cfg_lgl <- vapply(
                 cfg_yml, function(.x) {any(hash %in% .x[["config_hash"]])}, TRUE)
